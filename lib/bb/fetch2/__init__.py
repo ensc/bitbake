@@ -456,6 +456,9 @@ def runfetchcmd(cmd, d, quiet = False, cleanup = []):
                   'SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'HOME',
                   'GIT_PROXY_IGNORE', 'SOCKS5_USER', 'SOCKS5_PASSWD']
 
+    exportvars.extend(['ELITO_CRT', 'ELITO_KEY', 'ELITO_PROG_SSL_CLIENT',
+                       'ELITO_PROG_PROXY', 'ELITO_USE_LIBPROXY'])
+
     new_env = os.environ.copy()
     for var in exportvars:
         val = d.getVar(var, True)
