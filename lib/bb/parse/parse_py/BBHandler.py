@@ -148,10 +148,18 @@ def handle(fn, d, include):
     if ext != ".bbclass":
         data.setVar('FILE', abs_fn, d)
 
-    statements.eval(d)
+    try:
+        statements.eval(d)
+    except bb.parse.SkipPackage:
+        bb.data.setVar("__SKIPPED", True, d)
 
     if ext == ".bbclass":
         classes.remove(__classname__)
+    elif bb.data.getVar("__SKIPPED", d, True):
+        if include == 0:
+            return { "" : d }
+        else:
+            return d
     else:
         if include == 0:
             return ast.multi_finalize(fn, d)

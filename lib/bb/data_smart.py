@@ -141,6 +141,8 @@ class DataSmart(MutableMapping):
                 s = __expand_python_regexp__.sub(varparse.python_sub, s)
                 if s == olds:
                     break
+            except bb.parse.SkipPackage:
+                raise
             except ExpansionError:
                 raise
             except Exception as exc:
