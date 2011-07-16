@@ -874,7 +874,13 @@ class BBCooker:
 
         # Handle any INHERITs and inherit the base class
         bbclasses  = ["base"] + (data.getVar('INHERIT', True) or "").split()
+        seen_inherits={}
         for bbclass in bbclasses:
+            if seen_inherits.has_key(bbclass):
+                parselog.warn("Duplicate INHERIT entry '%s'" % bbclass)
+                continue
+
+            seen_inherits[bbclass] = 1
             data = _inherit(bbclass, data)
 
         # Nomally we only register event handlers at the end of parsing .bb files
