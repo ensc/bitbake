@@ -50,6 +50,7 @@ class Svn(FetchMethod):
             raise MissingParameterError('module', ud.url)
 
         ud.basecmd = d.getVar('FETCHCMD_svn', True)
+        ud.tunnel  = data.getVar('BB_SVN_TUNNEL', d, True) or ""
 
         ud.module = ud.parm["module"]
 
@@ -72,6 +73,9 @@ class Svn(FetchMethod):
         """
 
         proto = ud.parm.get('protocol', 'svn')
+
+        if proto == "svn":
+            proto = proto + ud.tunnel
 
         svn_rsh = None
         if proto == "svn+ssh" and "rsh" in ud.parm:
