@@ -37,6 +37,7 @@ _context = {
     "os": os,
     "bb": bb,
     "time": time,
+    "re": re,
 }
 
 def explode_version(s):
