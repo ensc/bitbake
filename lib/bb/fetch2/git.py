@@ -119,6 +119,7 @@ class Git(FetchMethod):
             ud.branches[name] = branch
 
         ud.basecmd = data.getVar("FETCHCMD_git", d, True) or "git"
+        ud.mirroropt = data.getVar("FETCHCMD_OPT_GIT_MIRROR", d, True) or "--mirror=fetch"
         ud.runfetch = lambda args,d,**opts: runfetchcmd2(ud.basecmd, args, d, **opts)
 
         ud.write_tarballs = ((data.getVar("BB_GENERATE_MIRROR_TARBALLS", d, True) or "0") != "0") or ud.rebaseable
@@ -210,7 +211,7 @@ class Git(FetchMethod):
             except bb.fetch2.FetchError:
                 logger.debug(1, "No Origin")
 
-            ud.runfetch(['remote', 'add', '--mirror=fetch', 'origin', repourl], d)
+            ud.runfetch(['remote', 'add', ud.mirroropt, 'origin', repourl], d)
             fetch_cmd = ['fetch', '-f', '--prune', repourl, 'refs/*:refs/*']
             if ud.proto.lower() != 'file':
                 bb.fetch2.check_network_access(d, fetch_cmd, base_cmd = ud.basecmd, url = ud.url)
