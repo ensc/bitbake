@@ -488,5 +488,16 @@ class DataSmart(MutableMapping):
             value = d.getVar(key, False) or ""
             data.update({key:value})
 
-        data_str = str([(k, data[k]) for k in sorted(data.keys())])
-        return hashlib.md5(data_str).hexdigest()
+        data_str = [(k, data[k]) for k in sorted(data.keys())]
+
+        if logger.level >= 0:
+            fname = os.path.join(self.getVar("TMPDIR", True) or ".",
+                                 "datahash");
+
+            if os.access(fname + ".curr", os.F_OK):
+                utils.movefile(fname + ".curr", fname + ".prev")
+
+            open(fname + ".curr","w").write(
+                '\n'.join(map(lambda x: '%s="%s"' % x, data_str)))
+
+        return hashlib.md5(str(data_str)).hexdigest()
