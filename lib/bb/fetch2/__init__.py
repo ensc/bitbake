@@ -30,6 +30,7 @@ from __future__ import print_function
 import os, re
 import logging
 import urllib
+import pipes
 import bb.persist_data, bb.utils
 import bb.checksum
 from bb import data
@@ -923,38 +924,39 @@ class FetchMethod(object):
         cmd = None
 
         if unpack:
+            qfile = pipes.quote(file)
             if file.endswith('.tar'):
-                cmd = 'tar x --no-same-owner -f %s' % file
+                cmd = ['tar', 'x', '--no-same-owner',  '-f', file]
             elif file.endswith('.tgz') or file.endswith('.tar.gz') or file.endswith('.tar.Z'):
-                cmd = 'tar xz --no-same-owner -f %s' % file
+                cmd = ['tar', 'xz', '--no-same-owner', '-f', file]
             elif file.endswith('.tbz') or file.endswith('.tbz2') or file.endswith('.tar.bz2'):
-                cmd = 'bzip2 -dc %s | tar x --no-same-owner -f -' % file
+                cmd = 'bzip2 -dc %s | tar x --no-same-owner -f -' % qfile
             elif file.endswith('.gz') or file.endswith('.Z') or file.endswith('.z'):
-                cmd = 'gzip -dc %s > %s' % (file, efile)
+                cmd = 'gzip -dc %s > %s' % (qfile, pipes.quote(efile))
             elif file.endswith('.bz2'):
-                cmd = 'bzip2 -dc %s > %s' % (file, efile)
+                cmd = 'bzip2 -dc %s > %s' % (qfile, pipes.quote(efile))
             elif file.endswith('.tar.xz'):
-                cmd = 'xz -dc %s | tar x --no-same-owner -f -' % file
+                cmd = 'xz -dc %s | tar x --no-same-owner -f -' % qfile
             elif file.endswith('.xz'):
-                cmd = 'xz -dc %s > %s' % (file, efile)
+                cmd = 'xz -dc %s > %s' % (qfile, pipes.quote(efile))
             elif file.endswith('.zip') or file.endswith('.jar'):
                 try:
                     dos = bb.utils.to_boolean(urldata.parm.get('dos'), False)
                 except ValueError as exc:
                     bb.fatal("Invalid value for 'dos' parameter for %s: %s" %
                              (file, urldata.parm.get('dos')))
-                cmd = 'unzip -q -o'
+                cmd = ['unzip', '-q', '-o']
                 if dos:
-                    cmd = '%s -a' % cmd
-                cmd = "%s '%s'" % (cmd, file)
+                    cmd.append('-a')
+                cmd.append(file)
             elif file.endswith('.rpm') or file.endswith('.srpm'):
                 if 'extract' in urldata.parm:
                     unpack_file = urldata.parm.get('extract')
-                    cmd = 'rpm2cpio.sh %s | cpio -id %s' % (file, unpack_file)
+                    cmd = 'rpm2cpio.sh %s | cpio -id %s' % (qfile, pipes.quote(unpack_file))
                     iterate = True
                     iterate_file = unpack_file
                 else:
-                    cmd = 'rpm2cpio.sh %s | cpio -id' % (file)
+                    cmd = 'rpm2cpio.sh %s | cpio -id' % qfile
             elif file.endswith('.deb') or file.endswith('.ipk'):
                 cmd = 'ar -p %s data.tar.gz | zcat | tar --no-same-owner -xpf -' % file
 
@@ -975,8 +977,8 @@ class FetchMethod(object):
                         destdir = destdir.strip('/')
                     if destdir != "." and not os.access("%s/%s" % (rootdir, destdir), os.F_OK):
                         os.makedirs("%s/%s" % (rootdir, destdir))
-                    cmd = 'cp -pPR %s %s/%s/' % (file, rootdir, destdir)
-                    #cmd = 'tar -cf - -C "%d" -ps . | tar -xf - -C "%s/%s/"' % (file, rootdir, destdir)
+                    cmd = ['cp', '-pPR', file, '%s/%s/' % (rootdir, destdir)]
+                    #cmd = 'tar -cf - -C %d -ps . | tar -xf - -C %s/%s/' % (pipes.quote(file), pipes.quote(rootdir), pipes.quote(destdir))
                 else:
                     # The "destdir" handling was specifically done for FILESPATH
                     # items.  So, only do so for file:// entries.
@@ -985,7 +987,7 @@ class FetchMethod(object):
                     else:
                        destdir = "."
                     bb.utils.mkdirhier("%s/%s" % (rootdir, destdir))
-                    cmd = 'cp %s %s/%s/' % (file, rootdir, destdir)
+                    cmd = ['cp', file, '%s/%s/' % (rootdir, destdir)]
 
         if not cmd:
             return
@@ -999,10 +1001,12 @@ class FetchMethod(object):
             os.chdir(newdir)
 
         path = data.getVar('PATH', True)
+        new_env = os.environ.copy()
         if path:
-            cmd = "PATH=\"%s\" %s" % (path, cmd)
+            new_env['PATH'] = path
         bb.note("Unpacking %s to %s/" % (file, os.getcwd()))
-        ret = subprocess.call(cmd, preexec_fn=subprocess_setup, shell=True)
+        ret = subprocess.call(cmd, preexec_fn=subprocess_setup,
+                              shell=isinstance(cmd, basestring), env=new_env)
 
         os.chdir(save_cwd)
 
