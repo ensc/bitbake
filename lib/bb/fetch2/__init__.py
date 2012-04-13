@@ -456,10 +456,11 @@ def runfetchcmd(cmd, d, quiet = False, cleanup = []):
                   'SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'HOME',
                   'GIT_PROXY_IGNORE', 'SOCKS5_USER', 'SOCKS5_PASSWD']
 
+    new_env = os.environ.copy()
     for var in exportvars:
         val = d.getVar(var, True)
         if val:
-            cmd = 'export ' + var + '=\"%s\"; %s' % (val, cmd)
+            new_env[var] = val
 
     logger.debug(1, "Running %s", cmd)
 
@@ -467,7 +468,7 @@ def runfetchcmd(cmd, d, quiet = False, cleanup = []):
     error_message = ""
 
     try:
-        (output, errors) = bb.process.run(cmd, shell=True, stderr=subprocess.PIPE)
+        (output, errors) = bb.process.run(cmd, stderr=subprocess.PIPE, env=new_env)
         success = True
     except bb.process.NotFoundError as e:
         error_message = "Fetch command %s" % (e.command)
@@ -492,14 +493,29 @@ def runfetchcmd(cmd, d, quiet = False, cleanup = []):
 
     return output
 
-def check_network_access(d, info = "", url = None):
+def runfetchcmd2(cmd, args, d, **opts):
+    cmd += ' '
+    cmd += ' '.join(map(lambda a: pipes.quote(a), args))
+    return runfetchcmd(cmd, d, **opts)
+
+def check_network_access(d, info = "", url = None, base_cmd = None):
     """
     log remote network access, and error if BB_NO_NETWORK is set
     """
-    if d.getVar("BB_NO_NETWORK", True) == "1":
-        raise NetworkAccess(url, info)
+    if base_cmd:
+        info_str = base_cmd + ' '
     else:
-        logger.debug(1, "Fetcher accessed the network with the command %s" % info)
+        info_str = ''
+
+    if isinstance(info, list) or isinstance(info, tuple):
+        info_str += ' '.join(map(lambda a: pipes.quote(a), info))
+    else:
+        info_str += '%s' % info
+
+    if d.getVar("BB_NO_NETWORK", True) == "1":
+        raise NetworkAccess(url, info_str)
+    else:
+        logger.debug(1, "Fetcher accessed the network with the command %s" % info_str)
 
 def build_mirroruris(origud, mirrors, ld):
     uris = []
