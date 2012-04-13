@@ -65,8 +65,9 @@ import os
 import bb
 from   bb    import data
 from   bb.fetch2 import FetchMethod
-from   bb.fetch2 import runfetchcmd
+from   bb.fetch2 import runfetchcmd, runfetchcmd2
 from   bb.fetch2 import logger
+import pipes
 
 class Git(FetchMethod):
     """Class to fetch a module or modules from git repositories"""
@@ -118,6 +119,7 @@ class Git(FetchMethod):
             ud.branches[name] = branch
 
         ud.basecmd = data.getVar("FETCHCMD_git", d, True) or "git"
+        ud.runfetch = lambda args,d,**opts: runfetchcmd2(ud.basecmd, args, d, **opts)
 
         ud.write_tarballs = ((data.getVar("BB_GENERATE_MIRROR_TARBALLS", d, True) or "0") != "0") or ud.rebaseable
 
@@ -182,7 +184,7 @@ class Git(FetchMethod):
         if not os.path.exists(ud.clonedir) and os.path.exists(ud.fullmirror):
             bb.utils.mkdirhier(ud.clonedir)
             os.chdir(ud.clonedir)
-            runfetchcmd("tar -xzf %s" % (ud.fullmirror), d)
+            runfetchcmd(['tar', '-xzf', ud.fullmirror], d)
 
         repourl = "%s://%s%s%s" % (ud.proto, username, ud.host, ud.path)
 
@@ -191,10 +193,10 @@ class Git(FetchMethod):
             # We do this since git will use a "-l" option automatically for local urls where possible
             if repourl.startswith("file://"):
                 repourl = repourl[7:]
-            clone_cmd = "%s clone --bare --mirror %s %s" % (ud.basecmd, repourl, ud.clonedir)
+            clone_cmd = ['clone', '--bare', '--mirror', repourl, ud.clonedir]
             if ud.proto.lower() != 'file':
-                bb.fetch2.check_network_access(d, clone_cmd)
-            runfetchcmd(clone_cmd, d)
+                bb.fetch2.check_network_access(d, clone_cmd, base_cmd = ud.basecmd, url = repourl)
+            ud.runfetch(clone_cmd, d)
 
         os.chdir(ud.clonedir)
         # Update the checkout if needed
@@ -208,11 +210,11 @@ class Git(FetchMethod):
             except bb.fetch2.FetchError:
                 logger.debug(1, "No Origin")
 
-            runfetchcmd("%s remote add --mirror=fetch origin %s" % (ud.basecmd, repourl), d)
-            fetch_cmd = "%s fetch -f --prune %s refs/*:refs/*" % (ud.basecmd, repourl)
+            ud.runfetch(['remote', 'add', '--mirror=fetch', 'origin', repourl], d)
+            fetch_cmd = ['fetch', '-f', '--prune', repourl, 'refs/*:refs/*']
             if ud.proto.lower() != 'file':
-                bb.fetch2.check_network_access(d, fetch_cmd, ud.url)
-            runfetchcmd(fetch_cmd, d)
+                bb.fetch2.check_network_access(d, fetch_cmd, base_cmd = ud.basecmd, url = ud.url)
+            ud.runfetch(fetch_cmd, d)
             runfetchcmd("%s prune-packed" % ud.basecmd, d)
             runfetchcmd("%s pack-redundant --all | xargs -r rm" % ud.basecmd, d)
             ud.repochanged = True
@@ -222,8 +224,8 @@ class Git(FetchMethod):
         if ud.write_tarballs and (ud.repochanged or not os.path.exists(ud.fullmirror)):
             os.chdir(ud.clonedir)
             logger.info("Creating tarball of git repository")
-            runfetchcmd("tar -czf %s %s" % (ud.fullmirror, os.path.join(".") ), d)
-            runfetchcmd("touch %s.done" % (ud.fullmirror), d)
+            runfetchcmd(['tar', '-czf', ud.fullmirror, os.path.join(".")], d)
+            runfetchcmd(['touch', ud.fullmirror + '.done'], d)
 
     def unpack(self, ud, destdir, d):
         """ unpack the downloaded src to destdir"""
@@ -241,9 +243,9 @@ class Git(FetchMethod):
         if os.path.exists(destdir):
             bb.utils.prunedir(destdir)
 
-        cloneflags = "-s -n"
+        cloneflags = ['clone', '-s', '-n']
         if ud.bareclone:
-            cloneflags += " --mirror"
+            cloneflags.append("--mirror")
 
         # Versions of git prior to 1.7.9.2 have issues where foo.git and foo get confused
         # and you end up with some horrible union of the two when you attempt to clone it
@@ -261,14 +263,16 @@ class Git(FetchMethod):
             os.symlink(ud.clonedir, indirectiondir)
             clonedir = indirectiondir
 
-        runfetchcmd("git clone %s %s/ %s" % (cloneflags, clonedir, destdir), d)
+        cloneflags.extend(["%s/" % clonedir, destdir])
+        ud.runfetch(cloneflags, d)
+
         if not ud.nocheckout:
             os.chdir(destdir)
             if subdir != "":
-                runfetchcmd("%s read-tree %s%s" % (ud.basecmd, ud.revisions[ud.names[0]], readpathspec), d)
+                ud.runfetch(['read-tree', '%s%s' % (ud.revisions[ud.names[0]], readpathspec)], d)
                 runfetchcmd("%s checkout-index -q -f -a" % ud.basecmd, d)
             else:
-                runfetchcmd("%s checkout %s" % (ud.basecmd, ud.revisions[ud.names[0]]), d)
+                ud.runfetch(['checkout', ud.revisions[ud.names[0]]], d)
         return True
 
     def clean(self, ud, d):
@@ -282,7 +286,7 @@ class Git(FetchMethod):
 
     def _contains_ref(self, tag, d):
         basecmd = data.getVar("FETCHCMD_git", d, True) or "git"
-        cmd = "%s log --pretty=oneline -n 1 %s -- 2> /dev/null | wc -l" % (basecmd, tag)
+        cmd = "%s log --pretty=oneline -n 1 %s -- 2> /dev/null | wc -l" % (basecmd, pipes.quote(tag))
         output = runfetchcmd(cmd, d, quiet=True)
         if len(output.split()) > 1:
             raise bb.fetch2.FetchError("The command '%s' gave output with more then 1 line unexpectedly, output: '%s'" % (cmd, output))
@@ -304,11 +308,13 @@ class Git(FetchMethod):
             username = ""
 
         basecmd = data.getVar("FETCHCMD_git", d, True) or "git"
-        cmd = "%s ls-remote %s://%s%s%s %s" % \
-              (basecmd, ud.proto, username, ud.host, ud.path, ud.branches[name])
+        cmd = ['ls-remote',
+               '%s://%s%s%s' % (ud.proto, username, ud.host, ud.path),
+               ud.branches[name]]
+
         if ud.proto.lower() != 'file':
-            bb.fetch2.check_network_access(d, cmd)
-        output = runfetchcmd(cmd, d, True)
+            bb.fetch2.check_network_access(d, cmd, base_cmd = ud.basecmd)
+        output = ud.runfetch(cmd, d, quiet=True)
         if not output:
             raise bb.fetch2.FetchError("The command %s gave empty output unexpectedly" % cmd, url)
         return output.split()[0]
@@ -341,7 +347,7 @@ class Git(FetchMethod):
         if not self._contains_ref(rev, d):
             self.download(None, ud, d)
 
-        output = runfetchcmd("%s rev-list %s -- 2> /dev/null | wc -l" % (ud.basecmd, rev), d, quiet=True)
+        output = runfetchcmd("%s rev-list %s -- 2> /dev/null | wc -l" % (ud.basecmd, pipes.quote(rev)), d, quiet=True)
         os.chdir(cwd)
 
         buildindex = "%s" % output.split()[0]
@@ -349,9 +355,8 @@ class Git(FetchMethod):
         return buildindex
 
     def checkstatus(self, uri, ud, d):
-        fetchcmd = "%s ls-remote %s" % (ud.basecmd, uri)
         try:
-            runfetchcmd(fetchcmd, d, quiet=True)
+            ud.runfetch(['ls-remote',  uri], d, quiet=True)
             return True
         except FetchError:
             return False
