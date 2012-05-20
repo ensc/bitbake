@@ -184,6 +184,10 @@ Default BBFILES are the .bb files in the current directory.""")
                action = "store", dest = "bind", default = False)
     parser.add_option("", "--no-setscene", help = "Do not run any setscene tasks, forces builds",
                action = "store_true", dest = "nosetscene", default = False)
+
+    parser.add_option("-j", "--jobs", help = "The number of threads BitBake should run at once",
+                      action = "store", dest = "number_threads", default = None)
+
     options, args = parser.parse_args(sys.argv)
 
     configuration = BBConfiguration(options)

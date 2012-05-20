@@ -142,6 +142,13 @@ class BBCooker:
         self.configuration.data = None
         self.loadConfigurationData()
 
+        if self.configuration.number_threads != None:
+            num = int(self.configuration.number_threads)
+            if num == 0:
+                num = multiprocessing.cpu_count()
+
+            self.configuration.data.setVar("BB_NUMBER_THREADS", str(num))
+
         # Take a lock so only one copy of bitbake can run against a given build
         # directory at a time
         lockfile = self.configuration.data.expand("${TOPDIR}/bitbake.lock")

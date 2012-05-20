@@ -103,6 +103,10 @@ Show debug logging for the specified logging domains
 .TP
 .B \-P, \-\-profile
 profile the command and print a report
+.TP
+.B \-j\fR [\fIjobs\fR], \fB\-\-jobs\fR[=\fIjobs\fR]
+The number of threads BitBake should run at once.  This option
+overrides the \fI${BB_NUMBER_THREADS}\fR configuration variable.
 
 .SH ENVIRONMENT VARIABLES
 bitbake uses the following environment variables to control its
