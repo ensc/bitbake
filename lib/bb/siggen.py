@@ -66,6 +66,7 @@ class SignatureGeneratorBasic(SignatureGenerator):
     def __init__(self, data):
         self.basehash = {}
         self.taskhash = {}
+        self.taskhash_cont = {}
         self.taskdeps = {}
         self.runtaskdeps = {}
         self.file_checksum_values = {}
@@ -173,6 +174,7 @@ class SignatureGeneratorBasic(SignatureGenerator):
     def get_taskhash(self, fn, task, deps, dataCache):
         k = fn + "." + task
         data = dataCache.basetaskhash[k]
+        cont = [('__base', str(data))]
         self.runtaskdeps[k] = []
         self.file_checksum_values[k] = {}
         recipename = dataCache.pkg_fn[fn]
@@ -183,6 +185,7 @@ class SignatureGeneratorBasic(SignatureGenerator):
             if dep not in self.taskhash:
                 bb.fatal("%s is not in taskhash, caller isn't calling in dependency order?", dep)
             data = data + self.taskhash[dep]
+            cont.append([str(dep), self.taskhash[dep]])
             self.runtaskdeps[k].append(dep)
 
         if task in dataCache.file_checksums[fn]:
@@ -190,13 +193,16 @@ class SignatureGeneratorBasic(SignatureGenerator):
             for (f,cs) in checksums:
                 self.file_checksum_values[k][f] = cs
                 data = data + cs
+                cont.append([str(f), cs])
 
         taint = self.read_taint(fn, task, dataCache.stamp[fn])
         if taint:
             data = data + taint
+            cont.append(['TAINT', taint])
 
         h = hashlib.md5(data).hexdigest()
         self.taskhash[k] = h
+        self.taskhash_cont[k] = cont
         #d.setVar("BB_TASKHASH_task-%s" % task, taskhash[task])
         return h
 
@@ -254,6 +260,18 @@ class SignatureGeneratorBasic(SignatureGenerator):
             except OSError:
                 pass
             raise err
+
+        try:
+            d = os.path.dirname(sigfile) + "_text"
+            f = os.path.basename(sigfile)
+            bb.utils.mkdirhier(d)
+
+            with open(d + "/" + f, "wb") as stream:
+                stream.write(''.join(map(lambda x: '%s: %s\n' %
+                                         (x[0],x[1]), self.taskhash_cont[k])))
+        except Exception, e:
+            bb.error("failed to create textual copy of sigdata: %s" % e)
+            pass
 
     def dump_sigs(self, dataCache):
         for fn in self.taskdeps:
