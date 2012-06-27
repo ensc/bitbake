@@ -640,6 +640,29 @@ def try_mirrors(d, origud, mirrors, check = False):
             return ret
     return None
 
+def latest_revision(ud, d, name):
+    mirrors = mirror_from_string(d.getVar('PREMIRRORS', True))
+    ld = d.createCopy()
+    rev = None
+    uris, uds = build_mirroruris(ud, mirrors, ld)
+
+    for index, uri in enumerate(uris):
+        if not hasattr(uds[index].method, '_latest_revision'):
+            continue
+
+        try:
+            rev = uds[index].method.latest_revision(uri, uds[index], d, name)
+            break
+        except bb.fetch2.NetworkAccess:
+            pass
+        except bb.fetch2.BBFetchException as e:
+            pass
+
+    if rev == None:
+        rev = ud.method.latest_revision(ud.url, ud, d, name)
+
+    return rev
+
 def srcrev_internal_helper(ud, d, name):
     """
     Return:
@@ -667,7 +690,7 @@ def srcrev_internal_helper(ud, d, name):
     if rev == "INVALID":
         raise FetchError("Please set SRCREV to a valid value", ud.url)
     if rev == "AUTOINC":
-        rev = ud.method.latest_revision(ud.url, ud, d, name)
+        rev = latest_revision(ud, d, name)
 
     return rev
 
