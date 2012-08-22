@@ -18,6 +18,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import bb.build
+import time
 
 class BBUIHelper:
     def __init__(self):
@@ -31,7 +32,8 @@ class BBUIHelper:
 
     def eventHandler(self, event):
         if isinstance(event, bb.build.TaskStarted):
-            self.running_tasks[event.pid] = { 'title' : "%s %s" % (event._package, event._task) }
+            self.running_tasks[event.pid] = { 'title' : "%s %s" % (event._package, event._task),
+                                              'started_str' : time.strftime("%X") }
             self.running_pids.append(event.pid)
             self.needUpdate = True
         if isinstance(event, bb.build.TaskSucceeded):

@@ -193,7 +193,8 @@ class TerminalFilter(object):
             return
         tasks = []
         for t in runningpids:
-            tasks.append("%s (pid %s)" % (activetasks[t]["title"], t))
+            tasks.append("%s - %s (pid %s)" %
+                         (activetasks[t]["started_str"], activetasks[t]["title"], t))
 
         if self.main.shutdown:
             content = "Waiting for %s running tasks to finish:" % len(activetasks)
