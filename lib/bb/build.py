@@ -292,20 +292,14 @@ def _task_data(fn, task, d):
     data.expandKeys(localdata)
     return localdata
 
-def _exec_task(fn, task, d, quieterr):
+def _exec_task(fn, task, localdata, quieterr):
     """Execute a BB 'task'
 
     Execution of a task involves a bit more setup than executing a function,
     running it with its own local metadata, and with some useful variables set.
     """
-    if not data.getVarFlag(task, 'task', d):
-        event.fire(TaskInvalid(task, d), d)
-        logger.error("No such task: %s" % task)
-        return 1
-
     logger.debug(1, "Executing task %s", task)
 
-    localdata = _task_data(fn, task, d)
     tempdir = localdata.getVar('T', True)
     if not tempdir:
         bb.fatal("T variable not set, unable to build")
@@ -424,19 +418,26 @@ def _exec_task(fn, task, d, quieterr):
     return 0
 
 def exec_task(fn, task, d):
+    if not data.getVarFlag(task, 'task', d):
+        event.fire(TaskInvalid(task, d), d)
+        logger.error("No such task: %s" % task)
+        return 1
+
+    localdata = _task_data(fn, task, d)
+
     try: 
         quieterr = False
         if d.getVarFlag(task, "quieterrors") is not None:
             quieterr = True
 
-        return _exec_task(fn, task, d, quieterr)
+        return _exec_task(fn, task, localdata, quieterr)
     except Exception:
         from traceback import format_exc
         if not quieterr:
             logger.error("Build of %s failed" % (task))
             logger.error(format_exc())
-            failedevent = TaskFailed(task, None, d, True)
-            event.fire(failedevent, d)
+            failedevent = TaskFailed(task, None, localdata, True)
+            event.fire(failedevent, localdata)
         return 1
 
 def stamp_internal(taskname, d, file_name):
